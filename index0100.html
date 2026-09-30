@@ -19,13 +19,16 @@
 
   <style>
     body { font-family: Arial, sans-serif; background: #f7057d; padding: 20px; color: #333; min-height: 100vh; margin: 0; box-sizing: border-box; }
-    .container { max-width: 800px; margin: auto; background: #f7057d; padding: 25px; border-radius: 8px; color: #fff; }
+    .container { max-width: 1000px; margin: auto; background: #f7057d; padding: 25px; border-radius: 8px; color: #fff; }
     h2.titulo-rosa { text-align: center; margin: 0 0 14px; font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-weight: 700; font-style: italic; font-size: 38px; letter-spacing: 2px; line-height: 1.2; color: #fff; text-shadow: 0 2px 4px rgba(120,0,50,.45); }
-    .vitrine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
+    .vitrine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 18px; margin-top: 18px; }
+    #grid-videos { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+    #grid-videos .vitrine-item { height: 380px; }
+    @media (max-width: 600px) { body { padding: 10px; } .container { padding: 14px; } .vitrine-item { height: 300px; } #grid-videos .vitrine-item { height: 420px; } }
     .card { border: none; border-radius: 6px; overflow: hidden; background: #d9046f; color: #fff; }
-    .vitrine-item { position: relative; background: #000; height: 150px; cursor: pointer; }
+    .vitrine-item { position: relative; background: #000; height: 280px; cursor: pointer; }
     .vitrine-item img, .vitrine-item video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
-    .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 38px; color: #fff; text-shadow: 0 0 8px #000; }
+    .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 64px; color: #fff; text-shadow: 0 0 8px #000; }
     .legenda { padding: 8px; font-size: 13px; line-height: 1.3; font-weight: bold; }
     .legenda b { display: block; font-size: 15px; text-shadow: 0 1px 2px rgba(120,0,50,.5); }
     .legenda span { color: #ffd84a; font-weight: bold; text-shadow: 0 1px 2px rgba(110,40,0,.6); }
@@ -162,6 +165,8 @@
         const r = await promptInstalacao.userChoice;
         promptInstalacao = null;
         if (r.outcome === "accepted") { marcarInstalado(); esconder(); }
+      } else if (!window.isSecureContext) {
+        alert("Este endereço não é seguro (não é https), por isso o navegador não permite instalar o aplicativo nem mostra o ícone. Publique o site em um endereço https e tente de novo.");
       } else if (ios) {
         alert("Para instalar no iPhone/iPad:\n\n1. Toque no botão Compartilhar (quadrado com seta)\n2. Escolha \"Adicionar à Tela de Início\"\n3. Toque em Adicionar");
       } else {
@@ -180,6 +185,7 @@
 
     // A barra aparece sempre que o app ainda não estiver instalado (em qualquer dispositivo)
     if (ios) sub.textContent = "Adicione à tela de início";
+    if (!window.isSecureContext) sub.textContent = "Abra o site em https para instalar";
     mostrar();
   })();
 
