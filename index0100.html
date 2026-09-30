@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SX Cosméticos</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f9; padding: 20px; color: #333; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    h2 { text-align: center; margin-top: 0; }
+    .vitrine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
+    .card { border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; }
+    .vitrine-item { position: relative; background: #000; height: 150px; cursor: pointer; }
+    .vitrine-item img, .vitrine-item video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+    .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 38px; color: #fff; text-shadow: 0 0 8px #000; }
+    .legenda { padding: 8px; font-size: 13px; line-height: 1.3; }
+    .legenda b { display: block; font-size: 14px; }
+    .legenda span { color: #c0392b; font-weight: bold; }
+
+    #painel-admin, #view-vitrine { display: none; }
+    #painel-admin { margin-top: 20px; }
+    .slot { margin-bottom: 15px; padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fafafa; display: flex; align-items: center; gap: 15px; }
+    .slot-info { flex: 1; }
+    .slot-preview { width: 60px; height: 60px; background: #eee; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #bbb; flex-shrink: 0; }
+    .slot-preview img, .slot-preview video { width: 100%; height: 100%; object-fit: cover; }
+    input[type="file"], .campo { margin-top: 8px; padding: 6px; border: 1px solid #ddd; width: 100%; border-radius: 4px; background: #fff; box-sizing: border-box; font-size: 14px; }
+    .badge-video { background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .badge-foto { background: #007bff; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+    button.btn-salvar { background: #28a745; color: white; border: none; padding: 15px; cursor: pointer; border-radius: 6px; font-size: 18px; width: 100%; font-weight: bold; margin-top: 15px; }
+    button.btn-salvar:hover { background: #218838; }
+    button.btn-salvar:disabled { background: #999; cursor: not-allowed; }
+    button.btn-cancelar { background: #eee; border: none; padding: 12px; width: 100%; border-radius: 6px; margin-top: 8px; font-size: 15px; cursor: pointer; }
+
+    .overlay-video { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    .overlay-video video { width: 100%; height: 100%; object-fit: contain; }
+    .fechar-video { position: fixed; top: 12px; right: 12px; z-index: 10000; background: rgba(0,0,0,.6); color: #fff; border: 1px solid #fff; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9000; display: none; align-items: center; justify-content: center; }
+    .modal-box { background: #fff; border-radius: 8px; padding: 18px; width: 92%; max-width: 380px; max-height: 92vh; overflow: auto; }
+    .modal-box img { width: 100%; max-height: 220px; object-fit: contain; background: #f4f4f9; border-radius: 6px; }
+    .modal-box input { font-size: 16px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>SX Cosméticos</h2>
+  <p style="text-align: center; color: #666; display: none;" id="subtitulo">Gerencie as mídias da vitrine</p>
+
+  <div id="painel-admin">
+    <div id="slots-container"></div>
+    <button class="btn-salvar" id="btnSalvar" onclick="salvarVitrine()">Salvar Alterações na Vitrine</button>
+  </div>
+
+  <div id="view-vitrine">
+    <div class="vitrine-grid" id="grid-videos"></div>
+    <div class="vitrine-grid" id="grid-fotos"></div>
+  </div>
+</div>
+
+<!-- Pedido -->
+<div class="modal" id="modal-pedido">
+  <div class="modal-box">
+    <img id="pedido-img" alt="">
+    <div class="legenda" id="pedido-legenda"></div>
+    <input class="campo" id="p-responsavel" placeholder="Nome do responsável">
+    <input class="campo" id="p-cliente" placeholder="Nome do cliente">
+    <input class="campo" id="p-telefone" type="tel" placeholder="Telefone com DDD">
+    <button class="btn-salvar" id="btnPedido" onclick="enviarPedido()">Enviar pedido</button>
+    <button class="btn-cancelar" onclick="fecharPedido()">Cancelar</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCEAFNYezHe0_qsk-0ob4ibcEglUEP_KH0",
+    authDomain: "dieta-monitorada-b9500.firebaseapp.com",
+    databaseURL: "https://dieta-monitorada-b9500-default-rtdb.firebaseio.com",
+    projectId: "dieta-monitorada-b9500",
+    storageBucket: "dieta-monitorada-b9500.firebasestorage.app",
+    messagingSenderId: "515092760726",
+    appId: "1:515092760726:web:cf0f62f5879d2a9dc35ab7",
+    measurementId: "G-9E3GJYQGHK"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const CLOUD_NAME = "dxqobkits";
+  const UPLOAD_PRESET = "sx_vitrine";
+
+  // Clientes veem só a vitrine. O painel de edição só abre com "?admin" ou "#admin" no endereço.
+  const ADMIN = /admin/i.test(location.search + location.hash);
+
+  const totalSlots = 17;
+  const TEMPO_OCULTO_MS = 10 * 60 * 1000;
+  let vitrineDados = {};
+  let serverOffset = 0;
+  let timerEdicao = null;
+  let pedidoAtual = null;
+  const agora = () => Date.now() + serverOffset;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function gerarInputsPainel() {
+    let html = "";
+    for (let i = 0; i < totalSlots; i++) {
+      const video = i < 2;
+      const tipoStr = video ? "VÍDEO " + (i + 1) : "FOTO " + (i - 1);
+      html += `
+        <div class="slot">
+          <div class="slot-preview" id="preview-${i}"><span style="font-size:10px; color:#777;">Vazio</span></div>
+          <div class="slot-info">
+            <label><strong>Slot ${i + 1}</strong> - <span class="${video ? "badge-video" : "badge-foto"}">${tipoStr}</span></label><br>
+            <input type="file" id="file-${i}" accept="${video ? "video/*" : "image/*"}" onchange="mostrarPreviewAdmin(event, ${i})">
+            ${video ? "" : `
+            <input class="campo" type="text" id="titulo-${i}" placeholder="Nome do produto (ex: Shampoo 1L)">
+            <input class="campo" type="text" id="desc-${i}" placeholder="Propaganda / preço (ex: R$ 39,90 - promoção)">`}
+            <small id="status-${i}" style="color:#666; font-weight:bold;"></small>
+          </div>
+        </div>`;
+    }
+    $("slots-container").innerHTML = html;
+  }
+
+  function mostrarPreviewAdmin(event, index) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const u = URL.createObjectURL(file);
+    $(`preview-${index}`).innerHTML = index < 2 ? `<video src="${u}" muted></video>` : `<img src="${u}">`;
+  }
+
+  function preencherPreviewsSalvos() {
+    for (let i = 0; i < totalSlots; i++) {
+      const item = vitrineDados[i];
+      if (item && item.url) {
+        $(`preview-${i}`).innerHTML = item.tipo === "video" ? `<video src="${item.url}" muted></video>` : `<img src="${item.url}">`;
+        if ($(`titulo-${i}`)) { $(`titulo-${i}`).value = item.titulo || ""; $(`desc-${i}`).value = item.desc || ""; }
+      }
+    }
+  }
+
+  function criarCard(item) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const media = document.createElement("div");
+    media.className = "vitrine-item";
+    if (item.tipo === "video") {
+      media.innerHTML = `<video src="${item.url}#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span>`;
+      media.onclick = () => abrirVideo(item.url);
+      card.appendChild(media);
+    } else {
+      media.innerHTML = `<img src="${item.url}" alt="">`;
+      media.onclick = () => abrirPedido(item);
+      card.appendChild(media);
+      if (item.titulo || item.desc) {
+        const l = document.createElement("div");
+        l.className = "legenda";
+        l.innerHTML = `<b>${esc(item.titulo)}</b><span>${esc(item.desc)}</span>`;
+        card.appendChild(l);
+      }
+    }
+    return card;
+  }
+
+  function atualizarTelaVitrine() {
+    const gv = $("grid-videos"), gf = $("grid-fotos");
+    gv.innerHTML = ""; gf.innerHTML = "";
+    let total = 0;
+    for (let i = 0; i < totalSlots; i++) {
+      const item = vitrineDados[i];
+      if (!item || !item.url) continue;
+      (item.tipo === "video" ? gv : gf).appendChild(criarCard(item));
+      total++;
+    }
+    if (!total) gf.innerHTML = `<p style="color:#777; grid-column:1/-1; text-align:center;">Novos produtos em breve.</p>`;
+  }
+
+  // ===== Vídeo em tela cheia =====
+  function abrirVideo(url) {
+    const ov = document.createElement("div");
+    ov.className = "overlay-video";
+    const v = document.createElement("video");
+    v.src = url; v.controls = true; v.autoplay = true;
+    const x = document.createElement("button");
+    x.className = "fechar-video"; x.textContent = "✕";
+    let fechado = false;
+    const fechar = () => {
+      if (fechado) return;
+      fechado = true;
+      v.pause();
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      ov.remove();
+    };
+    x.onclick = fechar;
+    ov.append(v, x);
+    document.body.appendChild(ov);
+    v.play().catch(() => {});
+    try {
+      if (v.requestFullscreen) v.requestFullscreen();
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+      else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+    } catch (e) {}
+    v.addEventListener("webkitendfullscreen", fechar);
+    document.addEventListener("fullscreenchange", function h() {
+      if (!document.fullscreenElement) { document.removeEventListener("fullscreenchange", h); fechar(); }
+    });
+  }
+
+  // ===== Pedido =====
+  function abrirPedido(item) {
+    pedidoAtual = item;
+    $("pedido-img").src = item.url;
+    $("pedido-legenda").innerHTML = (item.titulo || item.desc) ? `<b>${esc(item.titulo)}</b><span>${esc(item.desc)}</span>` : "";
+    $("modal-pedido").style.display = "flex";
+  }
+  function fecharPedido() { $("modal-pedido").style.display = "none"; }
+
+  async function enviarPedido() {
+    const responsavel = $("p-responsavel").value.trim();
+    const cliente = $("p-cliente").value.trim();
+    const telefone = $("p-telefone").value.trim();
+    if (!responsavel || !cliente) { alert("Preencha o nome do responsável e o nome do cliente."); return; }
+    if (telefone.replace(/\D/g, "").length < 10) { alert("Digite o telefone com DDD."); return; }
+
+    const btn = $("btnPedido");
+    btn.disabled = true; btn.innerText = "Enviando...";
+    try {
+      await db.ref("pedidosSX").push({
+        imagem: pedidoAtual.url,
+        produto: pedidoAtual.titulo || "",
+        propaganda: pedidoAtual.desc || "",
+        responsavel, cliente, telefone,
+        status: "novo",
+        criadoEm: firebase.database.ServerValue.TIMESTAMP
+      });
+      $("p-responsavel").value = ""; $("p-cliente").value = ""; $("p-telefone").value = "";
+      fecharPedido();
+      alert("✅ Pedido enviado!");
+    } catch (e) {
+      alert("❌ Não foi possível enviar: " + e.message);
+    } finally {
+      btn.disabled = false; btn.innerText = "Enviar pedido";
+    }
+  }
+
+  // ===== Modos =====
+  function modoVitrine(restanteMs) {
+    clearTimeout(timerEdicao);
+    $("painel-admin").style.display = "none";
+    $("subtitulo").style.display = "none";
+    atualizarTelaVitrine();
+    $("view-vitrine").style.display = "block";
+    if (restanteMs) timerEdicao = setTimeout(modoEdicao, restanteMs);
+  }
+  function modoEdicao() {
+    clearTimeout(timerEdicao);
+    $("view-vitrine").style.display = "none";
+    $("subtitulo").style.display = "block";
+    $("painel-admin").style.display = "block";
+    preencherPreviewsSalvos();
+  }
+
+  async function uploadCloudinary(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("upload_preset", UPLOAD_PRESET);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.secure_url) return data.secure_url;
+    throw new Error(data.error?.message || "Erro no Cloudinary");
+  }
+
+  async function salvarVitrine() {
+    const btn = $("btnSalvar");
+    btn.innerText = "Salvando..."; btn.disabled = true;
+    try {
+      for (let i = 0; i < totalSlots; i++) {
+        const input = $(`file-${i}`), status = $(`status-${i}`);
+        if (input.files && input.files[0]) {
+          status.innerText = "Enviando..."; status.style.color = "#e67e22";
+          const url = await uploadCloudinary(input.files[0]);
+          vitrineDados[i] = { tipo: i < 2 ? "video" : "imagem", url };
+          status.innerText = "Enviado!"; status.style.color = "green";
+        }
+      }
+      const slots = {};
+      for (let i = 0; i < totalSlots; i++) {
+        const item = vitrineDados[i];
+        if (item && item.url) {
+          if (i >= 2) { item.titulo = $(`titulo-${i}`).value.trim(); item.desc = $(`desc-${i}`).value.trim(); }
+          slots["s" + i] = { tipo: item.tipo, url: item.url, titulo: item.titulo || "", desc: item.desc || "" };
+        }
+      }
+      if (!Object.keys(slots).length) throw new Error("Escolha pelo menos uma imagem ou vídeo.");
+
+      await db.ref("vitrineSX").set({ slots, salvoEm: firebase.database.ServerValue.TIMESTAMP });
+
+      for (let i = 0; i < totalSlots; i++) { $(`file-${i}`).value = ""; $(`status-${i}`).innerText = ""; }
+      modoVitrine(TEMPO_OCULTO_MS);
+    } catch (error) {
+      console.error(error);
+      alert("❌ Erro ao salvar: " + error.message);
+    } finally {
+      btn.innerText = "Salvar Alterações na Vitrine"; btn.disabled = false;
+    }
+  }
+
+  window.onload = async function () {
+    gerarInputsPainel();
+    try {
+      const off = await db.ref(".info/serverTimeOffset").once("value");
+      serverOffset = off.val() || 0;
+      const dados = (await db.ref("vitrineSX").once("value")).val();
+      if (dados && dados.slots) {
+        for (let i = 0; i < totalSlots; i++) {
+          const item = dados.slots["s" + i];
+          if (item && item.url) vitrineDados[i] = item;
+        }
+      }
+      if (!ADMIN) { modoVitrine(null); return; }
+      const decorrido = dados && dados.salvoEm ? agora() - dados.salvoEm : Infinity;
+      if (decorrido < TEMPO_OCULTO_MS) modoVitrine(TEMPO_OCULTO_MS - decorrido);
+      else modoEdicao();
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível ler o Firebase: " + e.message);
+    }
+  };
+</script>
+</body>
+</html>
